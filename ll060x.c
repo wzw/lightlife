@@ -234,6 +234,8 @@ void variable_init(void)
     bitFlag.start = 0;
     bitFlag.shortKey = 0;
     cnt = 0;
+    nFlag.auto_mode = 0;         // set auto mode
+    nFlag.touchoff_waiting = 0;
     return;
 }
 //---------------------------------------------------------------
@@ -261,7 +263,7 @@ void power_on_hw_init(void)
     return;
 }
 //---------------------------------------------------------------
-// Function: disable_ADC()
+// Function: enable_ADC()
 // 
 //---------------------------------------------------------------
 void enable_ADC(void)
@@ -466,47 +468,39 @@ void lcd_display_batt(UCHAR batt)
 	lcd_ram1 &= 0b11111110;
 	lcd_ram2 &= 0b11111110;
 	lcd_ram3 &= 0b11111110;
-	lcd_ram3 |= 0b00001000;
 
 	batt &= 0x07;
 	switch(batt) {
     	case 0:
+        	lcd_ram3 ^= 0b00001000;
     		break;
     	case 1:
     		lcd_ram0 |= 0b00000001;
+        	lcd_ram3 |= 0b00001000;
     		break;
     	case 2:
     		lcd_ram1 |= 0b00000001;
     		lcd_ram0 |= 0b00000001;
+        	lcd_ram3 |= 0b00001000;
     		break;
     	case 3:
     		lcd_ram2 |= 0b00000001;
     		lcd_ram1 |= 0b00000001;
     		lcd_ram0 |= 0b00000001;
+        	lcd_ram3 |= 0b00001000;
     		break;
-    	default:
+    	case 4:                                             // blink battery case
+        	lcd_ram3 |= 0b00001000;
     		lcd_ram3 |= 0b00000001;
     		lcd_ram2 |= 0b00000001;
     		lcd_ram1 |= 0b00000001;
     		lcd_ram0 |= 0b00000001;
     		break;
+    	default:
+    		break;
 	}
     return;
 }
-
-#if 0
-//---------------------------------------------------------------
-//Function: lcd_display_tmp(UCHAR flag)
-//input: flag
-//显示温度计，flag=1显示，=0不显示
-//---------------------------------------------------------------
-void lcd_display_tmp()
-{
-	if(flag) lcd_ram3 |= 0b00000010;
-	else lcd_ram3 &= 0b11111101;
-    return;
-}
-#endif
 
 //---------------------------------------------------------------
 //Function: lcd_display_light(UCHAR level)
@@ -1005,6 +999,8 @@ void power_on_pro(void)
     cnt=0;
     dis_lcd_all_seg();
     bitFlag.pwr_off = 0;
+    nFlag.auto_mode = 0;         // set auto mode
+    nFlag.touchoff_waiting = 0;
     return;
 }
 //---------------------------------------------------------------
@@ -1049,7 +1045,6 @@ void man_shut_down(void)
 void auto_shut_down(void)
 {	
 	if(min > IDLE_DOWN) {
-        FFlags.beeping = 1;
         while(FFlags.beeping | beep_count){};
         FFlags.beeping = 1;
         while(FFlags.beeping | beep_count){};
@@ -1065,6 +1060,7 @@ void auto_shut_down(void)
         if(sec & 0x01) {                                    // do every 500 ms
             if(batvolt < BATT_0) {
                 lcd_display_batt(0);
+                if(detect_touching() & (cnt & 0x01)) FFlags.beeping = 1;
                 cnt++;
             	if(cnt > 39) {                              // shutdown when battery low
                     cnt = 0; 
@@ -1200,8 +1196,7 @@ CHAR detect_touching(void)
         else return(1);
     } else {
 	    if( FFlags.btn ) {
-            if(on_touch > 10) return(0);                    //持续使用时间超过10min，不可使用
-            else return(1);
+            return(1);
         } else return(0);
     }
 }
@@ -1230,22 +1225,42 @@ void show_debug_msg(void)
 //---------------------------------------------------------------
 void on_touch_check(void)
 {
-    if(on_touch > 10) {                                     //持续使用超过10min，离开下方可使用
-        lcd_display_msg(0xee);                              //持续使用时间过长保护0xEE
-        FFlags.beeping = 1;
-        while(FFlags.beeping | beep_count){};
-        FFlags.beeping = 1;
-        while(FFlags.beeping | beep_count){};
-        FFlags.beeping = 1;
-        while(FFlags.beeping | beep_count){};
-        return;
-    }
-    if(!FFlags.led){                                        // if BLUE led on
-        if(on_touch > 0x5) {                                // 5min change to red LED
-            FFlags.beeping = 1;
-            FFlags.led = 1;
-            light_led_on();
-            FFlags.beeping = 1;
+    if(bitFlag.toggle_500ms){
+#ifndef __DEBUG
+        lcd_display_msg(on_touch);
+#endif
+        if(FFlags.led){                                     // Red light
+            if((sec == 0) & (on_touch == 3)) {
+                FFlags.beeping = 1;                         // long beep
+                while(FFlags.beeping | beep_count){};
+                FFlags.beeping = 1;
+                while(FFlags.beeping | beep_count){};
+                FFlags.beeping = 1;
+                sensor_Notouch();                           // turn off led, turn on lcd
+//                while(detect_touching());
+                if(!nFlag.auto_mode) {                      // manu mode
+                    FFlags.led = 0;                         // set back to blue led
+                }
+                nFlag.touchoff_waiting = 1;
+            }
+        }else{                                              // Blue light
+            if((sec == 0) & (on_touch == 1)) {
+                FFlags.beeping = 1;                         // 1 beep
+            }else{
+                if((!(sec & 1)) & (on_touch == 2)) {        // beep twice
+                    FFlags.beeping = 1;
+                } 
+                if((sec == 2) & (on_touch == 2)){
+                    if(!nFlag.auto_mode) {                  // manu mode
+                        FFlags.led = 1;                     // set to red led
+                        on_touch = 0;
+                        light_led_on();
+                    }else{
+                        sensor_Notouch();                   // turn off led, turn on lcd
+                        nFlag.touchoff_waiting = 1;
+                    }
+                }
+            }
         }
     }
     return;
@@ -1260,11 +1275,23 @@ void sensor_touch(void)
 	if(bitFlag.temp_high) {                                 //温度过高时，温度计闪动
         lamp_pr = 0;
 		BACKLIGHT_POWER = ON;
+        if( detect_touching() ) {
+            if(bitFlag.toggle_500ms){
+                if(sec & 0x3) {
+                    FFlags.beeping = 1;                     //beeping in 2 seconds
+                }
+            }
+        }
 		return;	
 	}
     
-	if(bitFlag.lamp_on)	{                                   //LED触摸是否已经开启?
-        min = 0;                                            //有触摸时，空闲计时清零
+    if(nFlag.touchoff_waiting){
+        if(!detect_touching()) nFlag.touchoff_waiting = 0;
+        return;
+    }
+    
+	if(bitFlag.lamp_on)	{                                   // lamp on?
+        min = 0;                                            // clr idle counter
 		if( detect_touching() == 0 ) {
 			sensor_Notouch();
 			return;
@@ -1292,6 +1319,7 @@ void sensor_touch(void)
             FFlags.used = 1;                                //设置使用标志
             used_day = 0;                                   //使用间隔清零
             min = 0;
+            sec = 0;
             light_led_on();
        }
     }
@@ -1307,7 +1335,7 @@ void enter_working_loop(void)
     clr_lcd_ram();                                          //clear LCD
     lcd_display_light(3);                                   //lightness
     if(!FFlags.debug)                                       //not in debug mode
-        lcd_display_msg(hex_to_bcd(used_day));              //使用间隔 
+        lcd_display_msg(hex_to_bcd(used_day));              //display days after last using
     lcd_display_batt(4);
     
     while(1) {
@@ -1339,6 +1367,7 @@ void enter_working_loop(void)
         if(bitFlag.shortKey) {
             FFlags.led = !FFlags.led;                       // change led channel
             light_led_on();                   
+            nFlag.auto_mode = 1;                            // set manu mode
         	bitFlag.shortKey = 0;
         }
     }

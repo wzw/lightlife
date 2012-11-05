@@ -75,7 +75,7 @@ __CONFIG(VCAPDIS);
 typedef     unsigned char           UCHAR;
 typedef     char                    CHAR;
 
-#define     VERSION_NUMBER          0x34
+#define     VERSION_NUMBER          0x36
 #ifdef __DEBUG
 #define     VERSION                 VERSION_NUMBER-1
 #warning PICC in DEBUG Mode.
@@ -226,25 +226,36 @@ typedef     char                    CHAR;
                                             //     2: Fixed Voltage Reference output cannot exceed VDD.
 
 struct Flag {
-	UCHAR shortKey:1;		    //bit0 short key press flag, < 1.5s
-	UCHAR toggle:1;				//bit1 timer toggle flag
-	UCHAR lamp_on:1;			//bit2 有触摸LED点亮标志 1=yes, 0=no
-	UCHAR temp_high:1;			//bit3 高温标志 1=high, 0=low
+	UCHAR shortKey:1;           //bit0 short key press flag, < 1.5s
+	UCHAR toggle:1;             //bit1 timer toggle flag
+	UCHAR lamp_on:1;            //bit2 有触摸LED点亮标志 1=yes, 0=no
+	UCHAR temp_high:1;          //bit3 高温标志 1=high, 0=low
 	UCHAR toggle_500ms:1;       //bit4 sync 500ms timer toggle flag
-	UCHAR pwr_off:1;			//bit5 关机标志
+	UCHAR pwr_off:1;            //bit5 关机标志
     UCHAR start_charge:1;       //bit6 开始充电标志
     UCHAR start:1;              //bit7 开机指示
 }bitFlag;
 
+struct n_Flag {
+	UCHAR auto_mode:1;          //bit0 auto mode
+	UCHAR touchoff_waiting:1;   //bit1
+	UCHAR bit2:1;               //bit2 
+	UCHAR bit3:1;               //bit3 
+	UCHAR bit4:1;               //bit4 
+	UCHAR bit5:1;               //bit5 
+    UCHAR bit6:1;               //bit6 
+    UCHAR bit7:1;               //bit7 
+}nFlag;
+
 typedef struct {
-	UCHAR btn:1;				//bit0,触摸按钮标志,1=touch, 0=none
-	UCHAR debug:1;				//bit1,是否是debug模式, 1=yes, 0=no
-	UCHAR used:1;				//bit2 使用标志, used=1, nouse=0
+	UCHAR btn:1;                //bit0,触摸按钮标志,1=touch, 0=none
+	UCHAR debug:1;              //bit1,是否是debug模式, 1=yes, 0=no
+	UCHAR used:1;               //bit2 使用标志, used=1, nouse=0
 	UCHAR preChargetimeout:1;   //bit3 1 when PRE_CHARGE_TIME exceed in precharging
     UCHAR FULLChargetimeout:1;  //bit4 1 when FULL_CHARGE_TIME exceed in FULLcharging
     UCHAR beeping:1;            //bit5 enable beep
     UCHAR mtouch_toggle:1;      //bit6 new mtouch counter got
-    UCHAR led:1;				//bit7 表示LED 的通道, 0=BLUE, 1=RED
+    UCHAR led:1;                //bit7 表示LED 的通道, 0=BLUE, 1=RED
 }oFlag;
 oFlag FFlags;
 
